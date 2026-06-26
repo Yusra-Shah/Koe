@@ -1,0 +1,55 @@
+# Project documentation (local only)
+docx/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Node / React / Vite
+node_modules/
+dist/
+.vite/
+*.local
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Google Cloud
+.gcloudignore
+service-account*.json
+
+# TFLite models (large binaries)
+*.tflite
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
