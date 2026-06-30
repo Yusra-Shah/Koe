@@ -53,3 +53,13 @@ npm-debug.log*
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Jupyter notebook outputs
+.ipynb_checkpoints/
+__results___files/
+model/__results___files/
+
+# Large model binaries (tflite in koe_models/ is already covered)
+*.keras
+*.pkl
+*.npy

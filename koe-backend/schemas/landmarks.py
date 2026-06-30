@@ -30,6 +30,9 @@ class TranslateRequest(BaseModel):
 
 class TranslateResponse(BaseModel):
     text: str
+    text_ur: str = ""
     sign_label: str
     confidence: float
     language: str
+    repeat_requested: bool = False
+    mcp_intent: str | None = None

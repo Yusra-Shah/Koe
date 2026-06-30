@@ -5,13 +5,17 @@ from config import BACKEND_PORT
 
 app = FastAPI(
     title="Koe API",
-    description="AI-powered sign language translation backend",
-    version="0.1.0",
+    description="AI-powered sign language translation backend — Koe Accessibility Platform",
+    version="1.0.0",
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://*.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,7 +28,7 @@ app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "koe-backend"}
+    return {"status": "ok", "service": "koe-backend", "version": "1.0.0"}
 
 
 if __name__ == "__main__":

@@ -1,14 +1,13 @@
 import { useState, useRef, useCallback } from 'react'
 import { translateSign } from '../services/api'
 
-export default function useTranslation(language = 'en') {
-  const [result, setResult] = useState(null)
+export default function useTranslation(language = 'en', sessionId = '') {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const debounceRef = useRef(null)
   const lastSentRef = useRef(0)
+  const debounceRef = useRef(null)
 
-  const translate = useCallback((landmarks) => {
+  const translate = useCallback((landmarks, onResult) => {
     if (!landmarks || landmarks.length === 0) return
 
     const now = Date.now()
@@ -24,15 +23,15 @@ export default function useTranslation(language = 'en') {
         const formatted = landmarks.map((hand) =>
           hand.map((p) => ({ x: p.x, y: p.y, z: p.z }))
         )
-        const data = await translateSign(formatted, language)
-        setResult(data)
+        const data = await translateSign(formatted, language, sessionId)
+        onResult?.(data)
       } catch (err) {
         setError(err.message || 'Translation failed')
       } finally {
         setLoading(false)
       }
     }, 300)
-  }, [language])
+  }, [language, sessionId])
 
-  return { result, loading, error, translate }
+  return { loading, error, translate }
 }
