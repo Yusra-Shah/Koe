@@ -12,3 +12,4 @@ clerk-backend-api==1.9.3
 numpy==2.3.0
 httpx==0.28.1
 tensorflow-cpu==2.19.0
+fastmcp==2.8.1

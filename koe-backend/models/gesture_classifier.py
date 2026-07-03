@@ -1,11 +1,44 @@
 import json
 import os
 import pickle
+import tempfile
 from pathlib import Path
 
 import numpy as np
 
 MODEL_DIR = Path(os.getenv("MODEL_DIR", Path(__file__).parent.parent.parent / "model" / "koe_models"))
+MODEL_BUCKET = os.getenv("MODEL_BUCKET", "")
+
+# Files to fetch from Cloud Storage when MODEL_BUCKET is set
+_BUCKET_FILES = [
+    "koe_mlp.tflite",
+    "koe_model_config.json",
+    "label_encoder.pkl",
+    "X_mean.npy",
+    "X_std.npy",
+]
+
+
+def _download_from_gcs(bucket_name: str, dest_dir: Path) -> None:
+    """Download model assets from Cloud Storage if not already present locally."""
+    from google.cloud import storage
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for filename in _BUCKET_FILES:
+        dest = dest_dir / filename
+        if not dest.exists():
+            blob = bucket.blob(f"koe_models/{filename}")
+            blob.download_to_filename(str(dest))
+
+
+def _ensure_model_dir() -> Path:
+    """Return local model directory, downloading from GCS if needed."""
+    if MODEL_BUCKET and not (MODEL_DIR / "koe_mlp.tflite").exists():
+        cache_dir = Path(tempfile.gettempdir()) / "koe_models"
+        _download_from_gcs(MODEL_BUCKET, cache_dir)
+        return cache_dir
+    return MODEL_DIR
 
 _interpreter = None
 _label_encoder = None
@@ -20,17 +53,19 @@ def _load_assets():
     if _interpreter is not None:
         return
 
-    config_path = MODEL_DIR / "koe_model_config.json"
+    model_dir = _ensure_model_dir()
+
+    config_path = model_dir / "koe_model_config.json"
     with open(config_path) as f:
         _config = json.load(f)
 
-    with open(MODEL_DIR / "label_encoder.pkl", "rb") as f:
+    with open(model_dir / "label_encoder.pkl", "rb") as f:
         _label_encoder = pickle.load(f)
 
-    _x_mean = np.load(MODEL_DIR / "X_mean.npy")
-    _x_std = np.load(MODEL_DIR / "X_std.npy")
+    _x_mean = np.load(model_dir / "X_mean.npy")
+    _x_std = np.load(model_dir / "X_std.npy")
 
-    tflite_path = MODEL_DIR / "koe_mlp.tflite"
+    tflite_path = model_dir / "koe_mlp.tflite"
 
     try:
         import tensorflow as tf

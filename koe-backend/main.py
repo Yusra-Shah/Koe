@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import translate, tts, analytics
+from routers import translate, tts, analytics, mcp
 from config import BACKEND_PORT
 
 app = FastAPI(
@@ -24,6 +24,7 @@ app.add_middleware(
 app.include_router(translate.router, prefix="/translate", tags=["translate"])
 app.include_router(tts.router, prefix="/tts", tags=["tts"])
 app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+app.include_router(mcp.router, prefix="/mcp", tags=["mcp"])
 
 
 @app.get("/health")

@@ -5,6 +5,7 @@ import CameraView from './components/CameraView'
 import NotebookPanel from './components/NotebookPanel'
 import QuickCards from './components/QuickCards'
 import ReverseMode from './components/ReverseMode'
+import MCPConfirmDialog from './components/MCPConfirmDialog'
 import useTranslation from './hooks/useTranslation'
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -14,6 +15,7 @@ function TranslationPanel() {
   const [language, setLanguage] = useState('en')
   const [entries, setEntries] = useState([])
   const [showReverse, setShowReverse] = useState(false)
+  const [mcpPending, setMcpPending] = useState(null) // { intent, text }
   const sessionId = useRef(crypto.randomUUID())
 
   const { loading, translate } = useTranslation(language, sessionId.current)
@@ -21,6 +23,9 @@ function TranslationPanel() {
   const handleLandmarks = useCallback((lm) => {
     translate(lm, (result) => {
       if (!result || result.repeat_requested) return
+      if (result.mcp_intent) {
+        setMcpPending({ intent: result.mcp_intent, text: result.text || result.text_en || '' })
+      }
       setEntries((prev) => [
         {
           id: ++entryCounter,
@@ -82,6 +87,18 @@ function TranslationPanel() {
           {/* Quick Cards */}
           <QuickCards language={language} />
         </div>
+
+        {/* MCP Confirmation Dialog */}
+        <AnimatePresence>
+          {mcpPending && (
+            <MCPConfirmDialog
+              intent={mcpPending.intent}
+              translatedText={mcpPending.text}
+              sessionId={sessionId.current}
+              onClose={() => setMcpPending(null)}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Right — Notebook */}
         <div className="lg:w-80 flex flex-col min-h-[300px] lg:min-h-0">

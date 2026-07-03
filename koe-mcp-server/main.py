@@ -6,32 +6,31 @@ Exposes three tools for external action:
   - emergency_contact
   - appointment_request
 
-All tools are wrapped by a SafetyConsentAgent pattern (Day 4 ADK requirement).
-No tool executes without an explicit confirmed=True from the user.
+All tools require confirmed=True (Safety/Consent Agent — Day 4 ADK pattern).
+Human-in-the-loop: the Koe frontend shows a confirmation dialog before
+the backend ever calls these tools with confirmed=True.
+
+Transport: streamable HTTP so the backend can call tools via fastmcp.Client.
 """
 
 import logging
 
 from fastmcp import FastMCP
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
     "Koe MCP Server",
     instructions=(
-        "You are the Koe external action server. "
-        "You help deaf and mute users perform real-world tasks via tool calls. "
-        "IMPORTANT: Never execute any tool without the user explicitly confirming. "
-        "Always present a confirmation step before taking any external action."
+        "You are the Koe external action server for deaf and mute users. "
+        "Never execute any tool without confirmed=True. "
+        "Always surface a confirmation step before any external action."
     ),
 )
 
-# ---------------------------------------------------------------------------
-# Safety gate — all tools call this before acting
-# ---------------------------------------------------------------------------
 
 def _require_confirmation(confirmed: bool, action_description: str) -> dict | None:
-    """Returns an error dict if not confirmed, None if safe to proceed."""
     if not confirmed:
         return {
             "status": "awaiting_confirmation",
@@ -40,10 +39,6 @@ def _require_confirmation(confirmed: bool, action_description: str) -> dict | No
         }
     return None
 
-
-# ---------------------------------------------------------------------------
-# Tools
-# ---------------------------------------------------------------------------
 
 @mcp.tool()
 async def form_fill(
@@ -55,18 +50,15 @@ async def form_fill(
     Fill a form on behalf of the user.
 
     Args:
-        form_type: Type of form (e.g. 'hospital_registration', 'bank_account', 'id_card')
+        form_type: Type of form (e.g. hospital_registration, bank_account, id_card)
         fields: Dictionary of field names to values
         confirmed: Must be True for the action to execute (human-in-the-loop)
     """
-    gate = _require_confirmation(
-        confirmed,
-        f"Fill a {form_type} form with the provided information",
-    )
+    gate = _require_confirmation(confirmed, f"Fill a {form_type} form")
     if gate:
         return gate
 
-    logger.info("Executing form_fill: %s with fields: %s", form_type, list(fields.keys()))
+    logger.info("Executing form_fill: %s", form_type)
     return {
         "status": "submitted",
         "form_type": form_type,
@@ -85,18 +77,15 @@ async def emergency_contact(
     Send an emergency contact message on behalf of the user.
 
     Args:
-        contact_type: Who to contact: 'family', 'ambulance', 'police', 'hospital_staff'
+        contact_type: Who to contact: family, ambulance, police, hospital_staff
         message: The message to send
         confirmed: Must be True for the action to execute (human-in-the-loop)
     """
-    gate = _require_confirmation(
-        confirmed,
-        f"Send an emergency message to {contact_type}: '{message}'",
-    )
+    gate = _require_confirmation(confirmed, f"Send emergency message to {contact_type}")
     if gate:
         return gate
 
-    logger.info("Executing emergency_contact: %s — %s", contact_type, message)
+    logger.info("Executing emergency_contact: %s", contact_type)
     return {
         "status": "sent",
         "contact_type": contact_type,
@@ -115,15 +104,12 @@ async def appointment_request(
     Request a medical or service appointment.
 
     Args:
-        department: Department or service (e.g. 'emergency', 'cardiology', 'general')
+        department: Department or service (e.g. emergency, cardiology, general)
         date: Requested date in YYYY-MM-DD format
         notes: Optional additional notes
         confirmed: Must be True for the action to execute (human-in-the-loop)
     """
-    gate = _require_confirmation(
-        confirmed,
-        f"Request an appointment with {department} on {date}",
-    )
+    gate = _require_confirmation(confirmed, f"Request appointment with {department} on {date}")
     if gate:
         return gate
 
@@ -137,4 +123,4 @@ async def appointment_request(
 
 
 if __name__ == "__main__":
-    mcp.run(transport="sse", host="0.0.0.0", port=8081)
+    mcp.run(transport="http", host="0.0.0.0", port=8081)

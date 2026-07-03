@@ -27,10 +27,21 @@ export async function speakText(text, language = 'en') {
   return data
 }
 
-export async function logEvent(eventType, metadata = {}) {
+export async function logEvent(eventType, metadata = {}, sessionId = '') {
   const { data } = await api.post('/analytics', {
     event_type: eventType,
     metadata,
+    session_id: sessionId,
+  })
+  return data
+}
+
+export async function executeMCPTool(toolName, toolArgs = {}, confirmed = false, sessionId = '') {
+  const { data } = await api.post('/mcp/execute', {
+    tool_name: toolName,
+    tool_args: toolArgs,
+    confirmed,
+    session_id: sessionId,
   })
   return data
 }
