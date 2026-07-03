@@ -43,8 +43,9 @@ desktop.ini
 .gcloudignore
 service-account*.json
 
-# TFLite models (large binaries)
+# TFLite models and trained model assets (large binaries — upload to Cloud Storage)
 *.tflite
+koe_models/
 
 # Logs
 *.log
