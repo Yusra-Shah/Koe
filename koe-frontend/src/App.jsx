@@ -138,7 +138,7 @@ function KoeApp() {
         <main className="flex-1 flex items-center justify-center p-6">
           <div className="text-center max-w-md">
             <h2 className="font-display text-5xl text-koe-amber mb-4">Koe</h2>
-            <p className="text-koe-stone-muted text-lg mb-2">声 — Your Voice</p>
+            <p className="text-koe-stone-muted text-lg mb-2">声 Your Voice</p>
             <p className="text-koe-stone-muted text-sm leading-relaxed mb-6">
               AI-powered sign language communication for deaf, mute, and hard-of-hearing users.
               Sign in to begin.
@@ -157,7 +157,7 @@ function KoeApp() {
       </SignedIn>
 
       <footer className="shrink-0 text-center py-3 text-xs text-koe-stone-muted border-t border-koe-border">
-        Koe — Inspired by A Silent Voice
+        Koe · Inspired by A Silent Voice
       </footer>
     </div>
   )

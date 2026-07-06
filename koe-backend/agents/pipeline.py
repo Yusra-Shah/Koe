@@ -228,6 +228,115 @@ _runner = Runner(
     session_service=_session_service,
 )
 
+# Cache: (sign_label, language) -> result dict. Avoids repeat Gemini calls for same sign.
+_translation_cache: dict[tuple[str, str], dict] = {}
+
+
+def _label_to_sentence(sign_label: str) -> str:
+    label_lower = sign_label.lower()
+    if label_lower.startswith("letter_"):
+        letter = label_lower.replace("letter_", "").upper()
+        return f"The letter {letter}"
+    overrides = {
+        "help": "I need help",
+        "water": "I need water",
+        "yes": "Yes",
+        "no": "No",
+        "thank_you": "Thank you",
+        "please": "Please",
+        "sorry": "I'm sorry",
+        "hello": "Hello",
+        "goodbye": "Goodbye",
+        "emergency": "This is an emergency",
+        "doctor": "I need a doctor",
+        "pain": "I am in pain",
+        "food": "I need food",
+        "bathroom": "I need the bathroom",
+    }
+    if label_lower in overrides:
+        return overrides[label_lower]
+    return sign_label.replace("_", " ").title()
+
+
+def _sentence_to_urdu(text_en: str, sign_label: str) -> str:
+    label_lower = sign_label.lower()
+    if label_lower.startswith("letter_"):
+        letter = label_lower.replace("letter_", "").upper()
+        return f"حرف {letter}"
+    ur_map = {
+        "I need help": "مجھے مدد چاہیے",
+        "I need water": "مجھے پانی چاہیے",
+        "Yes": "ہاں",
+        "No": "نہیں",
+        "Thank you": "شکریہ",
+        "Please": "براہ کرم",
+        "I'm sorry": "مجھے معاف کریں",
+        "Hello": "ہیلو",
+        "Goodbye": "خدا حافظ",
+        "This is an emergency": "یہ ایک ہنگامی صورتحال ہے",
+        "I need a doctor": "مجھے ڈاکٹر چاہیے",
+        "I am in pain": "مجھے درد ہو رہا ہے",
+        "I need food": "مجھے کھانا چاہیے",
+        "I need the bathroom": "مجھے واش روم چاہیے",
+    }
+    return ur_map.get(text_en, text_en)
+
+
+async def _run_pipeline_direct(
+    landmarks: list[list[dict]],
+    language: str,
+    session_id: str,
+    user_id: str,
+) -> dict:
+    import json as _json
+
+    landmarks_json = _json.dumps(landmarks)
+
+    validation = _json.loads(validate_landmarks(landmarks_json))
+    if not validation.get("valid"):
+        return {
+            "text_en": "Invalid sign detected",
+            "text_ur": "",
+            "sign_label": "unknown",
+            "confidence": 0.0,
+            "mcp_intent": None,
+            "repeat_requested": False,
+        }
+
+    recognition = _json.loads(run_gesture_recognition(landmarks_json))
+    sign_label = recognition.get("sign_label", "unknown")
+    confidence = recognition.get("confidence", 0.0)
+
+    conf_result = _json.loads(evaluate_confidence(_json.dumps(recognition), session_id, language))
+    if conf_result.get("repeat_requested"):
+        return {
+            "text_en": "Please sign again more clearly.",
+            "text_ur": "",
+            "sign_label": sign_label,
+            "confidence": confidence,
+            "mcp_intent": None,
+            "repeat_requested": True,
+        }
+
+    text_en = _label_to_sentence(sign_label)
+    text_ur = _sentence_to_urdu(text_en, sign_label) if language == "ur" else ""
+
+    mcp_intent = None
+    label_lower = sign_label.lower()
+    if label_lower in ("emergency", "doctor", "pain"):
+        mcp_intent = "emergency_contact"
+    elif label_lower in ("help",):
+        mcp_intent = "form_fill"
+
+    return {
+        "text_en": text_en,
+        "text_ur": text_ur,
+        "sign_label": sign_label,
+        "confidence": confidence,
+        "mcp_intent": mcp_intent,
+        "repeat_requested": False,
+    }
+
 
 async def run_pipeline(
     landmarks: list[list[dict]],
@@ -238,49 +347,85 @@ async def run_pipeline(
     """
     Run the full 6-agent Koe pipeline for a single sign recognition request.
     Returns a dict with: text_en, text_ur, sign_label, confidence, mcp_intent, repeat_requested.
+    Falls back to direct TFLite-only mode if Gemini quota is exhausted.
     """
     import json as _json
 
-    session = await _session_service.create_session(
-        app_name="koe",
-        user_id=user_id,
-        session_id=session_id,
-        state={
-            "language": language,
-            "session_id": session_id,
-        },
-    )
-
+    # Fast path: run TFLite first so we know the sign label before hitting Gemini
     landmarks_json = _json.dumps(landmarks)
-    user_message = genai_types.Content(
-        role="user",
-        parts=[genai_types.Part(text=landmarks_json)],
-    )
+    validation = _json.loads(validate_landmarks(landmarks_json))
+    if not validation.get("valid"):
+        return {"text_en": "Invalid sign", "text_ur": "", "sign_label": "unknown",
+                "confidence": 0.0, "mcp_intent": None, "repeat_requested": False}
 
-    final_text = ""
-    async for event in _runner.run_async(
-        user_id=user_id,
-        session_id=session.id,
-        new_message=user_message,
-    ):
-        if event.is_final_response() and event.content:
-            for part in event.content.parts:
-                if part.text:
-                    final_text = part.text.strip()
+    recognition = _json.loads(run_gesture_recognition(landmarks_json))
+    sign_label = recognition.get("sign_label", "unknown")
+    confidence = recognition.get("confidence", 0.0)
 
-    # Parse JSON response from OutputAgent; fall back gracefully
+    conf_result = _json.loads(evaluate_confidence(_json.dumps(recognition), session_id, language))
+    if conf_result.get("repeat_requested"):
+        return {"text_en": "Please sign again more clearly.", "text_ur": "",
+                "sign_label": sign_label, "confidence": confidence,
+                "mcp_intent": None, "repeat_requested": True}
+
+    # Return cached translation if we've seen this sign+language before
+    cache_key = (sign_label, language)
+    if cache_key in _translation_cache:
+        cached = dict(_translation_cache[cache_key])
+        cached["confidence"] = confidence  # update confidence for this reading
+        return cached
+
     try:
-        result = _json.loads(final_text)
-        if "text_en" not in result:
-            raise ValueError("Missing text_en")
-        return result
-    except Exception:
-        # If OutputAgent returned freeform text, wrap it
-        return {
-            "text_en": final_text or "Could not translate sign",
-            "text_ur": "",
-            "sign_label": "unknown",
-            "confidence": 0.0,
-            "mcp_intent": None,
-            "repeat_requested": False,
-        }
+        session = await _session_service.create_session(
+            app_name="koe",
+            user_id=user_id,
+            session_id=session_id,
+            state={
+                "language": language,
+                "session_id": session_id,
+            },
+        )
+
+        landmarks_json = _json.dumps(landmarks)
+        user_message = genai_types.Content(
+            role="user",
+            parts=[genai_types.Part(text=landmarks_json)],
+        )
+
+        final_text = ""
+        async for event in _runner.run_async(
+            user_id=user_id,
+            session_id=session.id,
+            new_message=user_message,
+        ):
+            if event.is_final_response() and event.content:
+                for part in event.content.parts:
+                    if part.text:
+                        final_text = part.text.strip()
+
+        try:
+            result = _json.loads(final_text)
+            if "text_en" not in result:
+                raise ValueError("Missing text_en")
+            _translation_cache[cache_key] = result
+            return result
+        except Exception:
+            fallback = {
+                "text_en": final_text or "Could not translate sign",
+                "text_ur": "",
+                "sign_label": sign_label,
+                "confidence": confidence,
+                "mcp_intent": None,
+                "repeat_requested": False,
+            }
+            _translation_cache[cache_key] = fallback
+            return fallback
+
+    except Exception as exc:
+        err = str(exc)
+        if "429" in err or "RESOURCE_EXHAUSTED" in err or "quota" in err.lower():
+            logger.warning("Gemini quota exhausted — falling back to direct TFLite pipeline")
+            result = await _run_pipeline_direct(landmarks, language, session_id, user_id)
+            _translation_cache[cache_key] = result
+            return result
+        raise

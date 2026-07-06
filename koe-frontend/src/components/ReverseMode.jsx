@@ -37,7 +37,7 @@ export default function ReverseMode({ language, onClose }) {
         <div>
           <h3 className="text-koe-stone font-medium text-sm">Reverse Mode</h3>
           <p className="text-koe-stone-muted text-xs mt-0.5">
-            Hearing person types — deaf user reads
+            Hearing person types, deaf user reads
           </p>
         </div>
         <button
