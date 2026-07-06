@@ -4,6 +4,10 @@ Koe (声, Japanese for "voice") is an AI-powered accessibility platform that tra
 
 Built as a dual submission for the **Kaggle Agents for Good Capstone** and the **Google Cloud Skills Boost Hackathon (Problem Statement 1: Accessibility)**.
 
+**Live Demo:** https://koe-alpha.vercel.app  
+**Backend API:** https://koe-production-c3cb.up.railway.app  
+**GitHub:** https://github.com/Yusra-Shah/Koe
+
 ---
 
 ## What It Does
